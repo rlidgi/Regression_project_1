@@ -1,0 +1,357 @@
+---
+title: "STAT 510 Project"
+output:
+  pdf_document: default
+  html_notebook: default
+---
+
+
+
+
+Load libraries
+
+```{r}
+library(readr)
+library(car)
+library(tidyverse)
+library(dplyr)
+library(ggplot2)
+library(olsrr)
+library(MASS)
+library(corrplot)
+library(caret)
+library(ROCit)
+library(HH)
+library(boot)
+library(quantreg)
+library(Gammareg)
+library(olsrr)
+```
+
+
+```{r}
+sales <- read_csv("C:/Users/rliog/Desktop/Stat 510/KutnerData/Data from Text/insurance2.csv")
+```
+
+
+
+
+
+```{r}
+histogram(sales$X1,ylab="age")
+histogram(sales$X2,ylab="sex")
+histogram(sales$X3,ylab="bmi")
+histogram(sales$X4,ylab="children")
+histogram(sales$X5,ylab="smoker")
+histogram(sales$X6,ylab="region")
+histogram(sales$X7,ylab="expenses")
+
+
+```
+
+Check heteroscadicity
+```{r}
+MASS::boxcox(model_gamma)
+
+```
+
+
+
+
+```{r}
+ggplot(data=sales)+
+  geom_point(mapping=aes(x=age,y=expenses,color=(smoke*highbmi)))
+
+#ggplot(data=sales, aes(x=x1, y=y)) +
+ # geom_point(size=0.3)
+         
+```
+
+
+
+Add indicator variable for high bmi
+```{r}
+sales$highbmi=ifelse(sales$bmi>=32,2,1)
+#sales1$highbmi=ifelse(sales1$X3>=30,1,0)
+#sales2$highbmi=ifelse(sales2$X3>=30,1,0)
+#sales$risk=sales$highbmi+sales$x5
+#sales2$smoke=ifelse(sales2$x5>0,7,2)
+```
+
+
+
+
+
+
+## Models
+
+
+ Gamma
+
+
+
+```{r}
+data_partition <- createDataPartition(sales$expenses, times = 1,p = 0.8,list = FALSE)
+str(data_partition)
+train <- sales[data_partition,]
+test  <- sales[-data_partition,]
+n<-dim(sales)[1]
+m<-dim(sales[data_partition,])[1]
+```
+
+
+
+
+
+
+```{r}
+#glm with gamma
+model=glm(formula = (expenses)~.+smoke*highbmi, family = Gamma(link="log"), 
+    data = train)
+summary(model)
+plot(model)
+anova(model)
+
+#fitneeg1=glm(formula = y ~ x1+x2+x3+x4+x5+x6, ##family = Gamma(link = "log"), 
+  #  data = sales)
+#summary(fitneeg1)
+#plot(fitneeg1)
+#boxcox(fitneeg)
+
+predtrain<- exp(predict(model, newdata=train))
+predtest <- exp(predict(model, newdata=test))
+
+#Mean Square Error
+MSE=sum((train$expenses-predtrain)^2)/(m-2)
+print(MSE)
+#Mean Square Prediction Error
+MSPR=sum((test$expenses-predtest)^2)/(n-m)
+print(MSPR)
+```
+
+
+
+
+
+```{r}
+#linear model
+model=lm(formula = 
+           expenses~.+smoke*highbmi, data = train)
+summary(model)
+plot(model)
+anova(model)
+
+
+testpred <- predict(model, newdata=test)
+trainpred <- predict(model, newdata=train)
+
+#Mean Square Error
+MSE=sum((train$expenses-trainpred)^2)/(m-2)
+print(MSE)
+
+#Mean Square Prediction Error
+MSPR=sum((test$expenses-testpred)^2)/(n-m)
+print(MSPR)
+```
+
+
+
+
+
+
+```{r}
+
+# Generate some Gamma distributed data
+x <- train$expenses-train$pred
+
+# Sort x values
+x=x/20
+x <- sort(x);
+
+# Theoretical distribution
+x0 <- qgamma(ppoints(length(x)), shape = 1.41337, rate = 0.0021416);
+
+plot(x = x0, y = x, xlab = "Theoretical quantiles", ylab = "Observed quantiles");
+abline(a = 0, b = 1, col = "red");
+```
+ 
+
+
+```{r}
+#GLM with guassian
+model <- glm(expenses ~.,
+                  data = train,family = gaussian(link="log"))
+summary(model)
+plot(model)
+
+test$pred <- predict(model, newdata=test)
+train$pred <- predict(model, newdata=train)
+
+#Mean Square Error
+MSE=sum((train$expenses-train$pred)^2)/(m-2)
+print(MSE)
+#Mean Square Prediction Error
+MSPR=sum((test$expenses-test$pred)^2)/(n-m)
+print(MSPR)
+```
+
+residuals
+
+
+
+```{r}
+#linear model
+model <- lm(expenses ~.,
+                  data = train)
+summary(model)
+plot(model)
+
+test$pred <- predict(model, newdata=test)
+train$pred <- predict(model, newdata=train)
+
+#Mean Square Error
+MSE=sum((train$expenses-train$pred)^2)/(m-2)
+print(MSE)
+#Mean Square Prediction Error
+MSPR=sum((test$expenses-test$pred)^2)/(n-m)
+print(MSPR)
+```
+
+
+
+Influential outliers
+```{r}
+ols_plot_dffits(model)
+ols_plot_dfbetas(model)
+ols_plot_cooksd_chart(model)
+qf(0.5,2,10)
+```
+
+
+Remove influetial Outliers
+```{r}
+#sales_build<-sales_build[-556,]
+sales<-sales[-18,]
+
+
+
+
+
+
+#train=train[-99,]
+```
+
+
+
+Check Mullticollinearity
+
+```{r}
+Cp=cor(sales[,1:6])
+solve(Cp)
+
+```
+
+
+Confidence band
+```{r}
+print("Lower limit")
+ind<-2
+
+v<-A[ind,ind]
+MSE<-sum(fit$residuals^2)/df
+  
+WW<-p*qf(.95,p,n-p)
+W<-WW^.5
+
+print("Lower limit")
+fit$coefficients[ind]-W*(v*MSE)^.5
+print("Upper limit")
+fit$coefficients[ind]+W*(v*MSE)^.5
+```
+
+**Correlation Stats**
+
+```{r}
+#Correlation matrix
+cor(sales)
+
+#Scatterplot matrix
+pairs(sales)
+```
+Heteroscedacity
+
+
+```{r}
+yc<-25500
+
+indc<-as.factor(c(model_gamma$fitted.values>yc)) #extremely critical that we define this indicator as a FACTOR, otherwise code won't run!
+
+#indm<-as.factor(c(fitg$fitted.values>median(fitg$fitted.values)))
+
+sales2<-cbind(train,indc,model_gamma$fitted.values)
+sales2[indc==1,]
+```
+
+Perform the test
+```{r}
+HH::hovBF(y~indc,data=sales2)
+
+```
+
+
+Validation
+
+
+```{r}
+dim(sales)
+n<-dim(sales)[1]
+```
+
+Determine the size of the build set
+```{r}
+m<-round(.8*n) #build set size
+m
+ind<-sample(seq(1,n,1),m)
+```
+
+
+Subset the data into train and test sets.
+```{r}
+sales_build<-sales[ind,]
+sales_validate<-sales[-ind,]
+
+```
+
+**Validation through comparing models (I.A)**
+```{r}
+fitneeg.b<-glm(formula=y~x1+x4+x5+x6,family = Gamma (link=identity),data=sales_build)
+
+plot(fitneeg.b)
+summary(fitneeg.b)
+fitneeg.v<-glm(formula=y~x1+x4+x5+x6,family = Gamma (link=identity),data=sales_validate)
+summary(fitneeg.v)
+anova(fitneeg.b)
+```
+
+
+
+
+**Validation through comparing error criterion (I.B)**
+
+```{r}
+#Mean Square Error
+sum((fitneeg.b$residuals)^2)/(m-2)
+#Mean Square Prediction Error
+sum((sales_validate$y-predict(fitneeg.b,newdata=sales_validate))^2)/(n-m)
+```
+
+
+
+
+
+
+
+
+
+
+
